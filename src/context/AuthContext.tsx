@@ -115,15 +115,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
 
-      console.log('Login response:', response); // Debug log
-      console.log('Response structure:', {
-        success: response.success,
-        hasData: !!response.data,
-        dataType: typeof response.data,
-        dataKeys: response.data ? Object.keys(response.data) : [],
-        fullData: response.data, // Show the entire data object
-      });
-
       // Handle different response formats from backend
       if (response.success) {
         let userData: User | undefined;
@@ -191,6 +182,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (userData) {
           setUser(userData);
+          // Wait a moment for cookies to be set by the backend, then verify auth
+          // This ensures the backend cookies are properly set and recognized
+          await new Promise(resolve => setTimeout(resolve, 200));
+          await checkAuth();
           return authResponse || { success: true, user: userData };
         } else {
           // Log the actual data structure for debugging
@@ -236,8 +231,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           username,
           password,
         });
-
-        console.log('Signup response:', response); // Debug log
 
         if (response.success && response.data) {
           // Handle different response structures from backend
