@@ -27,6 +27,9 @@ export function SignupForm() {
       const result = await signup(validated.email, validated.username, validated.password);
       
       if (result.success) {
+        // Wait a moment for cookies to be set and authentication to be verified
+        // The signup handler already triggers checkAuth
+        await new Promise(resolve => setTimeout(resolve, 300));
         router.push('/chat');
       } else {
         setError(result.error || 'Signup failed');

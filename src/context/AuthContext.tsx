@@ -240,13 +240,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('Signup response:', response); // Debug log
 
         if (response.success && response.data) {
-          // response.data is AuthResponse which has user and tokens
-          if (response.data.user) {
-            setUser(response.data.user);
-            return response.data;
+          // Handle different response structures from backend
+          let userData: User | undefined;
+          let authResponse: AuthResponse | undefined;
+
+          const data = response.data as any;
+          
+          // Case 1: response.data has user property (most common)
+          if (data.user && typeof data.user === 'object') {
+            // Backend may return 'id' instead of '_id', normalize it
+            const user = data.user;
+            userData = {
+              _id: user._id || user.id, // Handle both _id and id
+              email: user.email,
+              username: user.username,
+              oauthProviders: user.oauthProviders,
+              createdAt: user.createdAt,
+              updatedAt: user.updatedAt,
+            } as User;
+            
+            authResponse = {
+              success: true,
+              user: userData,
+              tokens: data.tokens,
+            };
+          }
+          // Case 2: response.data is the user object directly
+          else if (data.email && data.username) {
+            userData = {
+              _id: data._id || data.id,
+              email: data.email,
+              username: data.username,
+              oauthProviders: data.oauthProviders,
+              createdAt: data.createdAt,
+              updatedAt: data.updatedAt,
+            } as User;
+            
+            authResponse = {
+              success: true,
+              user: userData,
+              tokens: data.tokens,
+            };
+          }
+
+          if (userData) {
+            setUser(userData);
+            // Wait a moment for cookies to be set by the backend, then verify auth
+            // This ensures the backend cookies are properly set and recognized
+            await new Promise(resolve => setTimeout(resolve, 200));
+            await checkAuth();
+            return authResponse || { success: true, user: userData };
           } else {
             // If success but no user, check for error in data
-            throw new Error(response.data.error || 'Signup failed - no user data received');
+            throw new Error(data.error || 'Signup failed - no user data received');
           }
         } else {
           // response.success is false, check response.error
