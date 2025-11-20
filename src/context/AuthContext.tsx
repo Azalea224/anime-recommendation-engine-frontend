@@ -78,6 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       isCheckingAuth.current = true;
       setIsLoading(true);
+      
+      // Debug: Check if token is available before making request
+      const tokenBeforeRequest = getAccessToken();
+      if (tokenBeforeRequest) {
+        console.log('🔑 Token available before /api/auth/me request');
+      } else {
+        console.warn('⚠️ No token available before /api/auth/me request');
+      }
+      
       const response = await apiClient.get<{ user: User }>('/api/auth/me');
       
       // Only set user if we have a successful response with user data
@@ -232,8 +241,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Verify we have a token before checking auth
           const token = getAccessToken();
-          if (!token) {
-            console.warn('No access token stored after login. Backend may only use cookies.');
+          if (token) {
+            console.log('✅ Token confirmed available before checkAuth:', token.substring(0, 20) + '...');
+          } else {
+            console.error('❌ No access token found before checkAuth!');
+            console.error('This means the token was not stored properly. Checking sessionStorage...');
+            if (typeof window !== 'undefined') {
+              const stored = sessionStorage.getItem('accessToken');
+              console.error('SessionStorage token:', stored ? stored.substring(0, 20) + '...' : 'null');
+            }
           }
           
           await checkAuth();

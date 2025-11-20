@@ -30,13 +30,16 @@ let accessToken: string | null = null;
  * Set access token (called after login/signup)
  */
 export function setAccessToken(token: string | null) {
+  console.log('💾 setAccessToken called:', token ? token.substring(0, 20) + '...' : 'null');
   accessToken = token;
   // Also store in sessionStorage as backup (cleared on tab close)
   if (typeof window !== 'undefined') {
     if (token) {
       sessionStorage.setItem('accessToken', token);
+      console.log('✅ Token stored in memory and sessionStorage');
     } else {
       sessionStorage.removeItem('accessToken');
+      console.log('🗑️ Token cleared from memory and sessionStorage');
     }
   }
 }
@@ -53,6 +56,7 @@ export function getAccessToken(): string | null {
   if (typeof window !== 'undefined') {
     const token = sessionStorage.getItem('accessToken');
     if (token) {
+      console.log('📦 Token retrieved from sessionStorage, restoring to memory');
       accessToken = token;
       return token;
     }
@@ -81,6 +85,19 @@ axiosInstance.interceptors.request.use(
     const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      // Debug: Log token being sent (only first few chars for security)
+      if (config.url?.includes('/auth/me') || config.url?.includes('/chat/')) {
+        console.log('🔑 Sending request with Authorization header:', {
+          url: config.url,
+          hasToken: !!token,
+          tokenPreview: token.substring(0, 20) + '...'
+        });
+      }
+    } else {
+      // Debug: Log when token is missing
+      if (config.url?.includes('/auth/me') || config.url?.includes('/chat/')) {
+        console.warn('⚠️ No access token available for request:', config.url);
+      }
     }
     // Cookies are also sent automatically via withCredentials
     return config;
