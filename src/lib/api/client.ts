@@ -100,6 +100,13 @@ axiosInstance.interceptors.response.use(
     const apiResponse = response.data as any;
     const responseData = apiResponse?.data; // The actual data inside ApiResponse
     
+    // Check response headers for tokens (some backends return tokens in headers)
+    const authHeader = response.headers['authorization'] || response.headers['Authorization'];
+    let tokenFromHeader: string | null = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      tokenFromHeader = authHeader.substring(7);
+    }
+    
     // Debug: Log response to see if tokens are present
     if (response.config.url?.includes('/auth/login') || response.config.url?.includes('/auth/signup')) {
       console.log('Auth response structure:', {
@@ -107,6 +114,7 @@ axiosInstance.interceptors.response.use(
         apiResponseKeys: apiResponse ? Object.keys(apiResponse) : [],
         hasResponseData: !!responseData,
         responseDataKeys: responseData ? Object.keys(responseData) : [],
+        hasAuthHeader: !!authHeader,
         fullApiResponse: apiResponse
       });
     }
@@ -114,6 +122,7 @@ axiosInstance.interceptors.response.use(
     // Try to extract access token from various response structures
     // Check both in apiResponse (top level) and responseData (nested)
     const token = 
+      tokenFromHeader || // First check response headers
       // Top level of ApiResponse
       apiResponse?.tokens?.accessToken ||
       apiResponse?.accessToken ||
@@ -131,8 +140,10 @@ axiosInstance.interceptors.response.use(
       console.log('Token extracted from response, storing...');
       setAccessToken(token);
     } else if (response.config.url?.includes('/auth/login') || response.config.url?.includes('/auth/signup')) {
-      console.warn('No token found in auth response. Backend may only use cookies.');
-      console.warn('Full response:', JSON.stringify(apiResponse, null, 2));
+      console.error('⚠️ CRITICAL: No access token found in login/signup response!');
+      console.error('The backend MUST return tokens in the response body or headers for the frontend to authenticate.');
+      console.error('Current response structure:', JSON.stringify(apiResponse, null, 2));
+      console.error('Backend should return: { success: true, data: { user: {...}, tokens: { accessToken: "...", refreshToken: "..." } } }');
     }
     
     return response;
