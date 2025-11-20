@@ -63,28 +63,37 @@ axiosInstance.interceptors.response.use(
 
     // Handle 401 Unauthorized - token expired
     if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+      // Check if the error indicates no token (not just expired token)
+      const errorMessage = (error.response?.data as any)?.error || '';
+      const isNoTokenError = 
+        errorMessage.includes('No refresh token') || 
+        errorMessage.includes('No token') ||
+        errorMessage.includes('Token not found') ||
+        errorMessage.includes('Not authenticated');
+      
+      // Only try to refresh if we have a token (not a "no token" error)
+      if (!isNoTokenError) {
+        originalRequest._retry = true;
 
-      try {
-        // Attempt to refresh token
-        // This will be implemented in Express.js backend
-        const refreshResponse = await axios.post(
-          `${API_BASE_URL}/api/auth/refresh`,
-          {},
-          { withCredentials: true }
-        );
+        try {
+          // Attempt to refresh token
+          const refreshResponse = await axios.post(
+            `${API_BASE_URL}/api/auth/refresh`,
+            {},
+            { withCredentials: true }
+          );
 
-        if (refreshResponse.data.success) {
-          // Retry original request
-          return axiosInstance(originalRequest);
+          if (refreshResponse.data.success) {
+            // Retry original request
+            return axiosInstance(originalRequest);
+          }
+        } catch (refreshError) {
+          // Refresh failed - token is invalid or expired
+          // Don't redirect automatically, let the app handle it
+          return Promise.reject(error);
         }
-      } catch (refreshError) {
-        // Refresh failed, redirect to login
-        if (typeof window !== 'undefined') {
-          window.location.href = '/auth/login';
-        }
-        return Promise.reject(refreshError);
       }
+      // If no token error, just reject without retry
     }
 
     return Promise.reject(error);
@@ -116,13 +125,16 @@ export const apiClient = {
     config?: AxiosRequestConfig
   ): Promise<ApiResponse<T>> {
     try {
-      const fullUrl = `${API_BASE_URL}${url}`;
-      console.log('API Request:', { method: 'POST', url: fullUrl, data });
       const response = await axiosInstance.post<ApiResponse<T>>(url, data, config);
-      console.log('API Response:', response.data);
       return response.data;
     } catch (error: any) {
-      console.error('API Error:', { url: `${API_BASE_URL}${url}`, error: error.response?.data || error.message });
+      // Only log unexpected errors (not 401s for auth endpoints when not logged in)
+      const isAuthEndpoint = url.includes('/auth/');
+      const isExpected401 = error.response?.status === 401 && 
+                           (isAuthEndpoint || error.response?.data?.error?.includes('No refresh token'));
+      if (!isExpected401) {
+        console.error('API Error:', { url: `${API_BASE_URL}${url}`, error: error.response?.data || error.message });
+      }
       return handleError(error);
     }
   },
@@ -169,7 +181,18 @@ function handleError<T>(error: any): ApiResponse<T> {
     let errorMessage = data?.error || data?.message;
     
     if (status === 401) {
-      errorMessage = errorMessage || 'Authentication required. Please log in.';
+      // Don't show generic error for "no token" - this is expected when not logged in
+      const isNoTokenError = 
+        errorMessage?.includes('No refresh token') || 
+        errorMessage?.includes('No token') ||
+        errorMessage?.includes('Token not found') ||
+        errorMessage?.includes('Not authenticated');
+      
+      if (isNoTokenError) {
+        errorMessage = errorMessage; // Use the specific backend error message
+      } else {
+        errorMessage = errorMessage || 'Authentication required. Please log in.';
+      }
     } else if (status === 403) {
       errorMessage = errorMessage || 'Access forbidden. You may not have permission.';
     } else if (status === 404) {

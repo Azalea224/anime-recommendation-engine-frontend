@@ -71,13 +71,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isCheckingAuth.current = true;
       setIsLoading(true);
       const response = await apiClient.get<{ user: User }>('/api/auth/me');
-      console.log('Auth check response:', response); // Debug log
       
       // Only set user if we have a successful response with user data
       if (response.success === true && response.data?.user) {
         setUser(response.data.user);
       } else {
         // Explicitly set to null if not authenticated
+        // Don't log errors for expected "no token" responses when not logged in
+        const isExpectedError = response.error?.includes('No refresh token') || 
+                                response.error?.includes('No token') ||
+                                response.error?.includes('Token not found');
+        if (!isExpectedError && response.error) {
+          console.log('Auth check response:', response); // Only log unexpected errors
+        }
         setUser(null);
       }
     } catch (error) {

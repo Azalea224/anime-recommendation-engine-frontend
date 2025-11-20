@@ -10,6 +10,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import type { ChatMessage, ChatRequest, ChatResponse, ChatHistoryResponse } from '@/types/api';
 import { apiClient } from '@/lib/api/client';
+import { useAuth } from './AuthContext';
 
 interface ChatContextType {
   messages: ChatMessage[];
@@ -27,11 +28,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   /**
-   * Load chat history from backend on mount
+   * Load chat history from backend on mount (only if authenticated)
    */
   useEffect(() => {
+    // Don't load if still checking auth or not authenticated
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+
     const loadChatHistory = async () => {
       try {
         const response = await apiClient.get<ChatHistoryResponse>('/api/chat/history?limit=50');
@@ -68,8 +75,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           });
           setMessages(loadedMessages);
         }
-      } catch (error) {
-        console.error('Error loading chat history from backend:', error);
+      } catch (error: any) {
+        // Only log error if it's not a 401 (expected when not authenticated)
+        if (error?.response?.status !== 401) {
+          console.error('Error loading chat history from backend:', error);
+        }
         // Fallback: try loading from localStorage if backend fails
         try {
           const savedMessages = localStorage.getItem('chatMessages');
@@ -105,7 +115,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     };
 
     loadChatHistory();
-  }, []);
+  }, [isAuthenticated, authLoading]);
 
   /**
    * Send a message to the chatbot
