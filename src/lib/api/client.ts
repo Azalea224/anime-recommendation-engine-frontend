@@ -84,18 +84,27 @@ axiosInstance.interceptors.request.use(
     // Get access token from storage
     const token = getAccessToken();
     if (token) {
+      // Set Authorization header - use both bracket and dot notation to ensure it's set
+      if (!config.headers) {
+        config.headers = {} as any;
+      }
+      // Set using both methods to ensure compatibility
+      config.headers['Authorization'] = `Bearer ${token}`;
       config.headers.Authorization = `Bearer ${token}`;
+      
       // Debug: Log token being sent (only first few chars for security)
-      if (config.url?.includes('/auth/me') || config.url?.includes('/chat/')) {
-        console.log('🔑 Sending request with Authorization header:', {
+      if (config.url?.includes('/auth/me') || config.url?.includes('/chat/') || config.url?.includes('/auth/refresh')) {
+        console.log('🔑 Request interceptor - Authorization header set:', {
           url: config.url,
           hasToken: !!token,
-          tokenPreview: token.substring(0, 20) + '...'
+          tokenPreview: token.substring(0, 20) + '...',
+          headerSet: !!config.headers['Authorization'] || !!config.headers.Authorization,
+          headerPreview: (config.headers['Authorization'] || config.headers.Authorization)?.substring(0, 30) + '...'
         });
       }
     } else {
       // Debug: Log when token is missing
-      if (config.url?.includes('/auth/me') || config.url?.includes('/chat/')) {
+      if (config.url?.includes('/auth/me') || config.url?.includes('/chat/') || config.url?.includes('/auth/refresh')) {
         console.warn('⚠️ No access token available for request:', config.url);
       }
     }
