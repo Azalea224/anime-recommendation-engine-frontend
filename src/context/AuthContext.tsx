@@ -15,7 +15,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { User, AuthResponse } from '@/types/user';
-import { apiClient, setAccessToken } from '@/lib/api/client';
+import { apiClient, setAccessToken, getAccessToken } from '@/lib/api/client';
 
 interface AuthContextType {
   user: User | null;
@@ -123,6 +123,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
 
+      // Debug: Log full response to see structure
+      console.log('Login full response:', JSON.stringify(response, null, 2));
+
       // Handle different response formats from backend
       if (response.success) {
         let userData: User | undefined;
@@ -130,6 +133,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (response.data) {
           const data = response.data as any;
+          
+          // Debug: Log data structure
+          console.log('Login response.data structure:', {
+            hasUser: !!data.user,
+            hasTokens: !!data.tokens,
+            keys: Object.keys(data),
+            fullData: data
+          });
           
           // Case 1: response.data has user property (most common)
           if (data.user && typeof data.user === 'object') {
@@ -150,9 +161,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               tokens: data.tokens,
             };
             
-            // Store access token if provided
-            if (data.tokens?.accessToken) {
-              setAccessToken(data.tokens.accessToken);
+            // Store access token if provided - check multiple locations
+            const accessToken = 
+              data.tokens?.accessToken ||
+              data.accessToken ||
+              (data.tokens && typeof data.tokens === 'string' ? data.tokens : null);
+            
+            if (accessToken) {
+              console.log('Storing access token from login response');
+              setAccessToken(accessToken);
+            } else {
+              console.warn('No access token found in login response. Checking if backend uses cookies only.');
             }
           }
           // Case 2: response.data is the user object directly
@@ -206,9 +225,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (userData) {
           setUser(userData);
-          // Wait a moment for cookies to be set by the backend, then verify auth
-          // This ensures the backend cookies are properly set and recognized
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Wait a moment for token extraction and cookies to be set by the backend
+          // The response interceptor should have extracted the token by now
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Verify we have a token before checking auth
+          const token = getAccessToken();
+          if (!token) {
+            console.warn('No access token stored after login. Backend may only use cookies.');
+          }
+          
           await checkAuth();
           return authResponse || { success: true, user: userData };
         } else {

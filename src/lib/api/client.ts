@@ -44,7 +44,7 @@ export function setAccessToken(token: string | null) {
 /**
  * Get access token
  */
-function getAccessToken(): string | null {
+export function getAccessToken(): string | null {
   // First check memory
   if (accessToken) {
     return accessToken;
@@ -96,20 +96,43 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => {
     // Check if response contains new tokens (from login/signup/refresh)
-    // Check multiple possible locations in the response
-    const data = response.data as any;
+    // response.data is the ApiResponse<T> structure: {success, data?, error?, message?}
+    const apiResponse = response.data as any;
+    const responseData = apiResponse?.data; // The actual data inside ApiResponse
+    
+    // Debug: Log response to see if tokens are present
+    if (response.config.url?.includes('/auth/login') || response.config.url?.includes('/auth/signup')) {
+      console.log('Auth response structure:', {
+        url: response.config.url,
+        apiResponseKeys: apiResponse ? Object.keys(apiResponse) : [],
+        hasResponseData: !!responseData,
+        responseDataKeys: responseData ? Object.keys(responseData) : [],
+        fullApiResponse: apiResponse
+      });
+    }
     
     // Try to extract access token from various response structures
+    // Check both in apiResponse (top level) and responseData (nested)
     const token = 
-      data?.data?.tokens?.accessToken ||
-      data?.tokens?.accessToken ||
-      data?.data?.accessToken ||
-      data?.accessToken ||
-      (data?.data?.user && data?.data?.tokens?.accessToken) ||
-      (data?.user && data?.tokens?.accessToken);
+      // Top level of ApiResponse
+      apiResponse?.tokens?.accessToken ||
+      apiResponse?.accessToken ||
+      // Inside responseData
+      responseData?.tokens?.accessToken ||
+      responseData?.accessToken ||
+      // Nested structures
+      apiResponse?.data?.tokens?.accessToken ||
+      apiResponse?.data?.accessToken ||
+      // User object with tokens
+      (responseData?.user && responseData?.tokens?.accessToken) ||
+      (apiResponse?.user && apiResponse?.tokens?.accessToken);
     
     if (token) {
+      console.log('Token extracted from response, storing...');
       setAccessToken(token);
+    } else if (response.config.url?.includes('/auth/login') || response.config.url?.includes('/auth/signup')) {
+      console.warn('No token found in auth response. Backend may only use cookies.');
+      console.warn('Full response:', JSON.stringify(apiResponse, null, 2));
     }
     
     return response;
