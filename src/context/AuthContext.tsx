@@ -162,13 +162,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             };
             
             // Store access token if provided - check multiple locations
+            // Tokens can be at: data.accessToken, data.tokens.accessToken, or top level
             const accessToken = 
+              data.accessToken ||  // Most common: tokens at same level as user
               data.tokens?.accessToken ||
-              data.accessToken ||
               (data.tokens && typeof data.tokens === 'string' ? data.tokens : null);
             
             if (accessToken) {
-              console.log('Storing access token from login response');
+              console.log('✅ Access token extracted and stored from login response');
               setAccessToken(accessToken);
             } else {
               console.warn('No access token found in login response. Checking if backend uses cookies only.');

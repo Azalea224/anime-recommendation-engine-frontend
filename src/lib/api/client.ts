@@ -121,18 +121,19 @@ axiosInstance.interceptors.response.use(
     
     // Try to extract access token from various response structures
     // Check both in apiResponse (top level) and responseData (nested)
+    // Priority: headers > responseData.accessToken > responseData.tokens.accessToken > top level
     const token = 
       tokenFromHeader || // First check response headers
-      // Top level of ApiResponse
-      apiResponse?.tokens?.accessToken ||
-      apiResponse?.accessToken ||
-      // Inside responseData
-      responseData?.tokens?.accessToken ||
+      // Inside responseData (most common - tokens at same level as user)
       responseData?.accessToken ||
+      responseData?.tokens?.accessToken ||
+      // Top level of ApiResponse
+      apiResponse?.accessToken ||
+      apiResponse?.tokens?.accessToken ||
       // Nested structures
-      apiResponse?.data?.tokens?.accessToken ||
       apiResponse?.data?.accessToken ||
-      // User object with tokens
+      apiResponse?.data?.tokens?.accessToken ||
+      // User object with tokens (less common)
       (responseData?.user && responseData?.tokens?.accessToken) ||
       (apiResponse?.user && apiResponse?.tokens?.accessToken);
     
