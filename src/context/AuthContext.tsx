@@ -15,7 +15,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { User, AuthResponse } from '@/types/user';
-import { apiClient } from '@/lib/api/client';
+import { apiClient, setAccessToken } from '@/lib/api/client';
 
 interface AuthContextType {
   user: User | null;
@@ -43,6 +43,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   useEffect(() => {
     let mounted = true;
+    
+    // Initialize access token from sessionStorage if available
+    if (typeof window !== 'undefined') {
+      const storedToken = sessionStorage.getItem('accessToken');
+      if (storedToken) {
+        setAccessToken(storedToken);
+      }
+    }
     
     const performCheck = async () => {
       if (mounted) {
@@ -141,6 +149,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               user: userData,
               tokens: data.tokens,
             };
+            
+            // Store access token if provided
+            if (data.tokens?.accessToken) {
+              setAccessToken(data.tokens.accessToken);
+            }
           }
           // Case 2: response.data is the user object directly
           else if (data.email && data.username) {
@@ -159,6 +172,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               user: userData,
               tokens: data.tokens,
             };
+            
+            // Store access token if provided
+            if (data.tokens?.accessToken) {
+              setAccessToken(data.tokens.accessToken);
+            }
           }
           // Case 3: Check if user is nested deeper (data.data.user)
           else if (data.data && data.data.user) {
@@ -172,11 +190,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               updatedAt: user.updatedAt,
             } as User;
             
+            const tokens = data.data.tokens || data.tokens;
             authResponse = {
               success: true,
               user: userData,
-              tokens: data.data.tokens || data.tokens,
+              tokens: tokens,
             };
+            
+            // Store access token if provided
+            if (tokens?.accessToken) {
+              setAccessToken(tokens.accessToken);
+            }
           }
         }
 
@@ -257,6 +281,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               user: userData,
               tokens: data.tokens,
             };
+            
+            // Store access token if provided
+            if (data.tokens?.accessToken) {
+              setAccessToken(data.tokens.accessToken);
+            }
           }
           // Case 2: response.data is the user object directly
           else if (data.email && data.username) {
@@ -274,6 +303,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               user: userData,
               tokens: data.tokens,
             };
+            
+            // Store access token if provided
+            if (data.tokens?.accessToken) {
+              setAccessToken(data.tokens.accessToken);
+            }
           }
 
           if (userData) {
@@ -317,6 +351,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Logout error:', error);
     } finally {
       setUser(null);
+      // Clear access token on logout
+      setAccessToken(null);
     }
   }, []);
 

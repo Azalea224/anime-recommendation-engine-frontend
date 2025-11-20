@@ -21,6 +21,46 @@ import type { ApiResponse } from '@/types/api';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 /**
+ * Token storage - stores access token in memory
+ * This is used when backend returns tokens in response body instead of cookies
+ */
+let accessToken: string | null = null;
+
+/**
+ * Set access token (called after login/signup)
+ */
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+  // Also store in sessionStorage as backup (cleared on tab close)
+  if (typeof window !== 'undefined') {
+    if (token) {
+      sessionStorage.setItem('accessToken', token);
+    } else {
+      sessionStorage.removeItem('accessToken');
+    }
+  }
+}
+
+/**
+ * Get access token
+ */
+function getAccessToken(): string | null {
+  // First check memory
+  if (accessToken) {
+    return accessToken;
+  }
+  // Fallback to sessionStorage
+  if (typeof window !== 'undefined') {
+    const token = sessionStorage.getItem('accessToken');
+    if (token) {
+      accessToken = token;
+      return token;
+    }
+  }
+  return null;
+}
+
+/**
  * Create axios instance with default configuration
  */
 const axiosInstance: AxiosInstance = axios.create({
@@ -33,17 +73,16 @@ const axiosInstance: AxiosInstance = axios.create({
 
 /**
  * Request interceptor to add authentication token
- * Tokens are stored in httpOnly cookies, so they're automatically included
- * This interceptor can be used to add additional headers if needed
+ * Adds Authorization header if access token is available
  */
 axiosInstance.interceptors.request.use(
   (config) => {
-    // Tokens are in httpOnly cookies, so they're automatically sent
-    // If you need to add Authorization header manually, do it here:
-    // const token = getTokenFromCookies();
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    // Get access token from storage
+    const token = getAccessToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Cookies are also sent automatically via withCredentials
     return config;
   },
   (error) => {
@@ -56,6 +95,23 @@ axiosInstance.interceptors.request.use(
  */
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => {
+    // Check if response contains new tokens (from login/signup/refresh)
+    // Check multiple possible locations in the response
+    const data = response.data as any;
+    
+    // Try to extract access token from various response structures
+    const token = 
+      data?.data?.tokens?.accessToken ||
+      data?.tokens?.accessToken ||
+      data?.data?.accessToken ||
+      data?.accessToken ||
+      (data?.data?.user && data?.data?.tokens?.accessToken) ||
+      (data?.user && data?.tokens?.accessToken);
+    
+    if (token) {
+      setAccessToken(token);
+    }
+    
     return response;
   },
   async (error: AxiosError) => {
@@ -84,6 +140,17 @@ axiosInstance.interceptors.response.use(
           );
 
           if (refreshResponse.data.success) {
+            // Update access token if returned in response
+            const refreshData = refreshResponse.data as any;
+            if (refreshData?.data?.tokens?.accessToken) {
+              setAccessToken(refreshData.data.tokens.accessToken);
+            } else if (refreshData?.tokens?.accessToken) {
+              setAccessToken(refreshData.tokens.accessToken);
+            } else if (refreshData?.data?.accessToken) {
+              setAccessToken(refreshData.data.accessToken);
+            } else if (refreshData?.accessToken) {
+              setAccessToken(refreshData.accessToken);
+            }
             // Retry original request
             return axiosInstance(originalRequest);
           }
